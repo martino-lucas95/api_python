@@ -1,278 +1,227 @@
-# Notes API - DevOps Demo Completo
+# API de Notas - Sistema de Versiones
 
-Demostración completa de herramientas DevOps con API de notas que incluye:
-- **Versionado de API** (v1 y v2 compatibles)
-- **Rolling Updates** sin downtime
-- **Blue/Green Deployment** con rollback automático
-- **Frontend** para visualización de errores
-- **Health checks** y monitoring
-- **Documentación completa** de cambios y procedimientos
+Este proyecto contiene una API RESTful en Python para guardar y gestionar notas, implementada con Flask. El proyecto está diseñado para demostrar diferentes estrategias de deployment en Kubernetes.
 
-### Endpoints
+## Versiones
 
-- **v0 (legacy)**:
-  - `GET /list` — lista notas (esquema `{title, note}`)
-  - `POST /add/<title>` — crea nota con cuerpo `{note}`
-- **v1**:
-  - `GET /api/v1/notes` — lista notas (esquema `{title, note}`)
-  - `POST /api/v1/notes` — crea nota `{title, note}`
-- **v2**:
-  - `GET /api/v2/notes` — lista notas (esquema enriquecido con metadatos)
-  - `POST /api/v2/notes` — crea nota `{title, content, [tags], [archived]}`
-  - `PATCH /api/v2/notes/{id}` — edita nota (¡CON BUG en v1.2.0!)
-- **Frontend**:
-  - `GET /ui` — interfaz web simple para probar API
-- **Health**:
-  - `GET /healthz` — para probes de K8s
+### v1.0.0 - API Básica ✅
+**Estado:** Implementada
 
-### Versionado de la imagen
+API básica con funcionalidad esencial para gestión de notas.
 
-- `notes-api:v1.0.0` — versión inicial sin probes ni rutas versionadas
-- `notes-api:v1.1.0` — añade `/healthz`, rutas `/api/v1` y `/api/v2`
-- `notes-api:v1.2.0` — añade frontend `/ui` y `PATCH` (con bug intencional)
-- `notes-api:v1.2.1` — frontend moderno separado en `static/index.html`
-- `notes-api:v2.0.0` — versión final con frontend moderno, API versionada y health checks
+#### Endpoints
 
-### Rolling Update en Kubernetes
+- **GET /** - Mensaje indicando que el API está activo
+  - Respuesta: `{"message": "API de Notas v1.0.0 está activo"}`
 
-Archivo: `api-deployment.yaml`
+- **POST /add/{title}** - Agregar una nota con un título
+  - Parámetros:
+    - `title` (path): Título de la nota
+    - Body JSON: `{"note": "contenido de la nota"}`
+  - Respuesta: `{"message": "Nota '{title}' agregada exitosamente"}`
 
-- **Estrategia**: `RollingUpdate` con `maxSurge: 1`, `maxUnavailable: 0`
-- **Probes**: `readinessProbe` y `livenessProbe` en `/healthz`
-- **Réplicas**: `3`
+- **GET /list** - Lista todas las notas creadas
+  - Respuesta: Array de notas `[{"title": "...", "note": "..."}]`
 
-#### Comandos útiles
+#### Características v1.0.0
+- ✅ 3 endpoints básicos funcionales
+- ✅ Persistencia en volumen mediante archivo JSON
+- ✅ Documentación Swagger disponible en `/apidocs/`
+- ✅ Health check en `/healthz` para Kubernetes probes
+- ✅ Manejo de errores básico
+
+#### Uso
+
+**Agregar una nota:**
+```bash
+curl -X POST "http://localhost:5001/add/Mi%20Primera%20Nota" \
+  -H "Content-Type: application/json" \
+  -d '{"note": "Este es el contenido de mi primera nota"}'
+```
+
+**Listar notas:**
+```bash
+curl http://localhost:5001/list
+```
+
+**Verificar que el API está activo:**
+```bash
+curl http://localhost:5001/
+```
+
+#### Deployment
+
+**Construcción de imagen:**
+```bash
+docker build -t notes-api:v1.0.0 .
+```
+
+**Ejecución local:**
+```bash
+docker run -p 5001:5001 -v notes_data:/data notes-api:v1.0.0
+```
+
+
+### v2.0.0 - Con Funcionalidad de Eliminación ✅
+**Estado:** Implementada y desplegada
+
+Extensión de v1.0.0 agregando capacidad de eliminar notas.
+
+#### Nuevas características v2.0.0
+- ✅ **DELETE /delete/{title}** - Eliminar una nota por título
+- ✅ Deployment mediante RollingUpdate
+- ✅ Mantenimiento de compatibilidad con v1.0.0
+- ✅ Funciones auxiliares para manejo del archivo de notas
+- ✅ Volumen persistente configurado
+
+#### Uso v2.0.0
+
+**Eliminar una nota:**
+```bash
+curl -X DELETE "http://localhost:5001/delete/Mi%20Primera%20Nota"
+```
+
+### v3.0.0 - Blue-Green Deployment ✅
+**Estado:** Implementada y lista para blue-green
+
+Versión basada en v2.0.0 preparada para blue-green deployment.
+
+#### Nuevas características v3.0.0
+- ✅ **GET /version** - Endpoint de información de versión y entorno
+- ✅ Detección automática de entorno (Blue/Green)
+- ✅ Configuración para blue-green deployment
+- ✅ Script automatizado para cambio de tráfico
+- ✅ Variables de entorno para identificación de deployment
+
+#### Uso v3.0.0
+
+**Información de versión:**
+```bash
+curl http://localhost:5001/version
+# Respuesta:
+# {
+#   "version": "v3.0.0",
+#   "environment": "blue|green",
+#   "hostname": "pod-hostname",
+#   "deployment_type": "blue-green",
+#   "features": ["create", "read", "delete", "version-switching"],
+#   "status": "ready"
+# }
+```
+
+## Arquitectura
+
+### Persistencia
+- Las notas se guardan en un archivo JSON línea por línea
+- Utiliza volumen persistente montado en `/data/notes.json`
+- Configuración via variable de entorno `NOTES_PATH`
+
+### Infraestructura
+- **Base:** Python 3.12 Alpine
+- **Framework:** Flask + Flasgger (Swagger)
+- **Puerto:** 5001
+- **Probes:** Health check en `/healthz`
+
+## Deployment en Kubernetes
+
+### Deployment Standard (RollingUpdate)
+El proyecto incluye configuración para deployment estándar en `api-deployment.yaml`:
+
+- **Namespace:** `api-notes`
+- **ConfigMap:** Configuración de `NOTES_PATH`
+- **Deployment:** 3 réplicas con RollingUpdate strategy
+- **Service:** ClusterIP en puerto 80 → 5001
 
 ```bash
-# Desplegar/actualizar manifiestos
 kubectl apply -f api-deployment.yaml
-
-# Ver estado del rollout
-kubectl rollout status deployment/api-notes -n api-notes
-
-# Actualizar la imagen (ejemplo a v1.1.0)
-kubectl -n api-notes set image deployment/api-notes api-notes=notes-api:v1.1.0 --record
-
-# Ver historial de rollouts
-kubectl rollout history deployment/api-notes -n api-notes
-
-# Hacer rollback
-kubectl rollout undo deployment/api-notes -n api-notes
 ```
 
-### Blue/Green Deployment
+### Blue-Green Deployment
+Para blue-green deployment, usar `blue-green-deployment.yaml`:
 
-Archivo: `blue-green-deployment.yaml`
+#### Configuración Blue-Green
+- **Blue Environment:** v2.0.0 (Estable)
+- **Green Environment:** v3.0.0 (Nueva versión)
+- **3 Servicios:**
+  - `api-notes`: Servicio de producción (configurable)
+  - `api-notes-blue`: Acceso directo al entorno Blue
+  - `api-notes-green`: Acceso directo al entorno Green
 
+#### Despliegue Blue-Green
 ```bash
-# 1. Deploy blue/green environments
+# Aplicar configuración blue-green
 kubectl apply -f blue-green-deployment.yaml
 
-# 2. Build new version with bug
-minikube image build -t notes-api:v1.2.0 .
+# Verificar deployments
+kubectl get pods -n api-notes
 
-# 3. Test green environment before switching
-kubectl port-forward -n api-notes service/api-notes-green 8082:80 &
+# Cambiar tráfico a Green (v3.0.0)
+./switch-traffic.sh green
 
-# 4. Switch traffic to green (CAREFUL - has bug!)
-kubectl patch service api-notes -n api-notes -p '{"spec":{"selector":{"version":"green"}}}'
-
-# 5. If error detected, immediate rollback to blue
-kubectl patch service api-notes -n api-notes -p '{"spec":{"selector":{"version":"blue"}}}'
-
-# 6. Clean up green deployment if needed
-kubectl delete deployment api-notes-green -n api-notes
+# Cambiar tráfico de vuelta a Blue (v2.0.0)
+./switch-traffic.sh blue
 ```
 
-### Build local y ejecución
-
+#### Testing de Entornos
 ```bash
-# Build
-docker build -t notes-api:v1.1.0 .
-# Run
-docker run --rm -p 5001:5001 -e NOTES_PATH=/data/notes.json -v $(pwd):/data notes-api:v1.1.0
-```
+# Probar producción (depende del entorno activo)
+kubectl port-forward -n api-notes service/api-notes 8080:80
+curl http://localhost:8080/version
 
-### Resumen de lo Implementado
-
-#### 🚀 **Estrategias de Deployment**
-1. **Rolling Update**: Actualización gradual sin downtime
-2. **Blue/Green Deployment**: Cambio instantáneo con rollback inmediato
-
-#### 🔧 **Versionado de API**
-- **Compatibilidad hacia atrás**: v0 legacy + v1 + v2
-- **Esquemas progresivos**: v1 simple, v2 con metadatos enriquecidos
-- **Misma base de datos**: transformaciones en tiempo real
-
-#### 🎯 **Herramientas DevOps Demostradas**
-- ✅ **Kubernetes**: Rolling updates, probes, services
-- ✅ **Docker**: Multi-stage builds, image versioning
-- ✅ **Minikube**: Local development environment
-- ✅ **Health Checks**: Readiness/liveness probes
-- ✅ **Service Mesh**: Blue/green traffic switching
-- ✅ **Error Simulation**: Bug intencional + rollback
-- ✅ **Frontend Integration**: Visualización de errores
-
-#### 📋 **Flujo de Demostración Ejecutado**
-
-1. **Setup inicial**: API v1.0.0 en K8s con Minikube
-2. **Rolling update**: v1.0.0 → v1.1.0 → v2.0.0 (health checks + versionado + frontend)
-3. **Blue/green setup**: Despliegue paralelo v2.0.0 (blue) y v3.0.0 (green con API v3)
-4. **Ambientes paralelos**: 6 pods corriendo (3 blue + 3 green)
-5. **Testing green**: Service fijo 8082 para probar v3.0.0 antes del switch
-6. **Traffic switch**: Service principal 8081 cambia de blue a green instantáneamente
-7. **Functional testing**: API v3 (PUT/DELETE) disponible solo en green
-8. **Emergency rollback**: Vuelta inmediata a blue con un comando patch
-9. **Validation**: Zero downtime confirmado, switch funcional demostrado
-
-### Changelog Detallado
-
-#### v3.0.0 (🚀 **GREEN DEPLOYMENT - API v3**)
-- ➕ **API v3 completa**: Endpoints PUT/DELETE para edición/eliminación de notas
-- ➕ **GET `/api/v3/notes`**: Lista con metadata enhanced y features array
-- ➕ **POST `/api/v3/notes`**: Crear con validación enhanced (título 1-100 chars)
-- ➕ **PUT `/api/v3/notes/{id}`**: Editar nota completa (NEW FEATURE)
-- ➕ **DELETE `/api/v3/notes/{id}`**: Eliminar nota (NEW FEATURE)
-- 🎯 **Blue/Green ready**: Versión green para deployment paralelo con blue v2.0.0
-
-#### v2.0.0 (🔧 **BLUE DEPLOYMENT - STABLE**)
-- ✨ **Frontend consolidado**: UI moderna en `static/index.html`
-- ✨ **API v1/v2 estable**: Compatibilidad completa hacia atrás
-- ✨ **Health monitoring**: Endpoints `/version` y `/healthz` para observabilidad
-- 🎯 **Blue/Green ready**: Versión blue para deployment paralelo
-
-#### v1.2.2 (🎯 **INDICADORES VISUALES**)
-- 🎯 **Detección automática**: Endpoint `/version` detecta environment (blue/green)
-- 🎯 **Badge dinámico**: Color azul para blue, verde para green
-- 🎯 **Info detallada**: Hostname, versión, estado del bug
-- 🎯 **Alerts contextuales**: Mensajes diferentes según environment
-- 🔧 **Variables de entorno**: `DEPLOYMENT_ENV` para identificación
-
-#### v1.2.1 (✨ **FRONTEND MEJORADO**)
-- ✨ **Frontend moderno**: Separado en `static/index.html` con diseño responsive
-- ✨ **UI/UX mejorada**: CSS grid, animaciones, alerts, loading states
-- ✨ **Arquitectura limpia**: Frontend separado del backend Flask
-- 🔧 **Mantiene bug PATCH**: Para demostración de rollback
-
-#### v1.2.0 (🚨 **CON BUG INTENCIONAL**)
-- ➕ **Frontend `/ui`**: Interfaz web completa para crear/editar notas
-- ➕ **`PATCH /api/v2/notes/{id}`**: Endpoint de edición (SIEMPRE devuelve 500)
-- ➕ **`blue-green-deployment.yaml`**: Configuración para deployment paralelo
-- 🎯 **Propósito**: Simular error de producción para rollback demo
-
-#### v1.1.0 (✅ **ESTABLE**)
-- ➕ **Health endpoint `/healthz`**: Para readiness/liveness probes
-- ➕ **API versionada**: Rutas `/api/v1/notes` y `/api/v2/notes`
-- ➕ **Metadata v2**: `id`, `created_at`, `updated_at`, `tags[]`, `archived`
-- ➕ **Rolling update config**: `maxSurge: 1`, `maxUnavailable: 0`
-- 🔧 **`api-deployment.yaml`**: Estrategia RollingUpdate + probes
-
-#### v1.0.0 (📦 **INICIAL**)
-- 🎯 **API base**: `GET /list`, `POST /add/<title>`
-- 🎯 **Storage**: Archivo JSON línea por línea
-- 🎯 **Swagger docs**: `/apidocs/` con Flasgger
-
-### Blue/Green Deployment - Pasos Ejecutados
-
-#### Preparación del Ambiente
-```bash
-# 1. Detener deployment original para evitar conflictos
-kubectl scale deployment api-notes --replicas=0 -n api-notes
-
-# 2. Construir imágenes diferenciadas
-minikube image build -t notes-api:v2.0.0 .  # Blue (base)
-minikube image build -t notes-api:v3.0.0 .  # Green (con API v3)
-
-# 3. Deploy ambientes paralelos
-kubectl apply -f blue-green-deployment.yaml
-
-# 4. Port-forward a ambos servicios
-kubectl port-forward -n api-notes service/api-notes 8081:80 &      # Switcheable
-kubectl port-forward -n api-notes service/api-notes-green 8082:80 & # Fijo green
-```
-
-#### Demostración de Switch
-```bash
-# 5. Verificar estado inicial (BLUE)
+# Probar Blue directamente
+kubectl port-forward -n api-notes service/api-notes-blue 8081:80
 curl http://localhost:8081/version
-kubectl get pods -n api-notes  # 3 blue + 3 green
 
-# 6. Crear datos en BLUE
-curl -X POST http://localhost:8081/api/v2/notes \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Nota en BLUE","content":"Creada en ambiente blue"}'
-
-# 7. Switch instantáneo a GREEN
-kubectl patch service api-notes -n api-notes -p '{"spec":{"selector":{"version":"green"}}}'
-curl http://localhost:8081/version  # Ahora environment: "green"
-
-# 8. Crear datos en GREEN
-curl -X POST http://localhost:8081/api/v2/notes \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Nota en GREEN","content":"Creada en ambiente green"}'
-
-# 9. Rollback instantáneo a BLUE
-kubectl patch service api-notes -n api-notes -p '{"spec":{"selector":{"version":"blue"}}}'
-
-# 10. Verificar diferencias de funcionalidad
-curl http://localhost:8081/api/v3/notes  # Blue (v2.0.0)
-curl http://localhost:8082/api/v3/notes  # Green (v3.0.0)
+# Probar Green directamente  
+kubectl port-forward -n api-notes service/api-notes-green 8082:80
+curl http://localhost:8082/version
 ```
 
-#### Características Demostradas
-✅ **Switch instantáneo**: Cambio de tráfico sin downtime  
-✅ **Ambientes paralelos**: 6 pods corriendo simultáneamente (3 blue + 3 green)  
-✅ **Rollback rápido**: Vuelta a versión anterior en segundos  
-✅ **Testing seguro**: Service green fijo (8082) para probar antes del switch  
-✅ **Zero downtime**: Sin interrupciones para usuarios  
-✅ **Control granular**: Selector de service controla el tráfico  
+## Desarrollo
 
-#### Cleanup
+### Requisitos
+- Python 3.12+
+- Flask
+- Flasgger
+
+### Instalación local
 ```bash
-kubectl delete deployment api-notes-blue api-notes-green -n api-notes
-kubectl delete service api-notes-green -n api-notes
-kubectl scale deployment api-notes --replicas=3 -n api-notes  # Restaurar original
+pip install -r requirements.txt
+python main.py
 ```
 
-### Archivos del Proyecto
+### Testing de endpoints
+La documentación interactiva está disponible en: `http://localhost:5001/apidocs/`
 
-- **`main.py`**: API Flask con versionado, endpoints y bug simulado
-- **`static/index.html`**: Frontend moderno separado con CSS responsive
-- **`api-deployment.yaml`**: Rolling update deployment
-- **`blue-green-deployment.yaml`**: Blue/green deployment paralelo
-- **`requirements.txt`**: Dependencies (flask, flasgger)
-- **`Dockerfile`**: Container build
-- **`README.md`**: Esta documentación completa
+## Archivos del Proyecto
 
-### Evidencia de Éxito
+### Código Fuente
+- `main.py` - Código principal de la API (todas las versiones)
+- `requirements.txt` - Dependencias de Python
+- `Dockerfile` - Configuración para construcción de imágenes
 
-#### Rolling Update Demostrado
-✅ **Zero-downtime deployment**: Rolling update v1.0.0 → v1.1.0 → v2.0.0 sin interrupciones  
-✅ **Health checks funcionando**: Probes de readiness/liveness en todos los deployments  
-✅ **Versionado backward-compatible**: v0, v1, v2, v3 API conviven simultáneamente  
+### Deployment Files
+- `api-deployment.yaml` - Deployment estándar con RollingUpdate
+- `blue-green-deployment.yaml` - Configuración blue-green deployment
+- `switch-traffic.sh` - Script para cambiar tráfico entre Blue/Green
 
-#### Blue/Green Deployment Demostrado  
-✅ **Switch instantáneo**: Cambio de blue a green sin downtime verificado  
-✅ **Ambientes paralelos**: 6 pods corriendo simultáneamente (3 blue + 3 green)  
-✅ **Rollback funcional**: Vuelta a versión anterior en < 5 segundos  
-✅ **Testing seguro**: Service green fijo para probar antes del switch  
-✅ **Control granular**: Selector de service controla el tráfico perfectamente  
+### Imágenes Docker Generadas
+- `notes-api:v1.0.0` - API básica (3 endpoints)
+- `notes-api:v2.0.0` - API con eliminación (4 endpoints)
+- `notes-api:v3.0.0` - API preparada para blue-green (5 endpoints)
 
-#### Funcionalidades Integradas
-✅ **Frontend operativo**: Interfaz web moderna en puerto 8081/8082  
-✅ **API v3 implementada**: Endpoints PUT/DELETE para edición/eliminación  
-✅ **Error simulation**: PATCH endpoint con bug intencional para rollback demo  
-✅ **Monitoring endpoints**: `/version`, `/healthz` para observabilidad  
-✅ **Documentation completa**: Pasos ejecutados y procedimientos documentados
+## Resumen del Proceso Implementado
 
-### Tecnologías Utilizadas
+✅ **Paso 1:** Limpieza de imágenes existentes en minikube  
+✅ **Paso 2:** Implementación de v1.0.0 - API básica con 3 endpoints  
+✅ **Paso 3:** Construcción y carga de imagen v1.0.0  
+✅ **Paso 4:** Implementación de v2.0.0 - Agregado endpoint DELETE  
+✅ **Paso 5:** Deployment v2.0.0 usando RollingUpdate strategy  
+✅ **Paso 6:** Implementación de v3.0.0 - Preparación para blue-green  
+✅ **Paso 7:** Configuración completa de blue-green deployment  
+✅ **Paso 8:** Script automatizado para switching de tráfico  
 
-- **Kubernetes**: Orchestration + service mesh
-- **Docker**: Containerization
-- **Flask**: Python web framework
-- **Minikube**: Local K8s cluster
-- **Swagger/Flasgger**: API documentation
-- **HTML/JavaScript**: Frontend simple
-- **YAML**: Infrastructure as Code
+---
 
-Este proyecto demuestra un pipeline DevOps completo con versionado, deployment strategies, error handling y rollback procedures.
+**✨ Proyecto completado exitosamente**  
+*Tres versiones implementadas con diferentes estrategias de deployment*

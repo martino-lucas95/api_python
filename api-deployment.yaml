@@ -9,7 +9,7 @@ metadata:
   name: api-notes-config
   namespace: api-notes
 data:
-  NOTES_PATH: "/tmp/notes.json"
+  NOTES_PATH: "/data/notes.json"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -44,6 +44,9 @@ spec:
                 configMapKeyRef:
                   name: api-notes-config
                   key: NOTES_PATH
+          volumeMounts:
+            - name: notes-storage
+              mountPath: /data
           readinessProbe:
             httpGet:
               path: /healthz
@@ -56,6 +59,9 @@ spec:
               port: 5001
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: notes-storage
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

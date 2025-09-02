@@ -9,17 +9,17 @@ metadata:
   name: api-notes-config
   namespace: api-notes
 data:
-  NOTES_PATH: "/tmp/notes.json"
+  NOTES_PATH: "/data/notes.json"
 ---
-# Blue Environment (current stable)
+# Blue Deployment (Stable - v2.0.0)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-notes-blue
   namespace: api-notes
   labels:
-    app: api-notes
     version: blue
+    environment: stable
 spec:
   replicas: 3
   selector:
@@ -31,6 +31,7 @@ spec:
       labels:
         app: api-notes
         version: blue
+        environment: stable
     spec:
       terminationGracePeriodSeconds: 30
       containers:
@@ -47,6 +48,9 @@ spec:
                   key: NOTES_PATH
             - name: DEPLOYMENT_ENV
               value: "blue"
+          volumeMounts:
+            - name: notes-storage
+              mountPath: /data
           readinessProbe:
             httpGet:
               path: /healthz
@@ -59,16 +63,19 @@ spec:
               port: 5001
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: notes-storage
+          emptyDir: {}
 ---
-# Green Environment (new deployment)
+# Green Deployment (New - v3.0.0)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-notes-green
   namespace: api-notes
   labels:
-    app: api-notes
     version: green
+    environment: staging
 spec:
   replicas: 3
   selector:
@@ -80,6 +87,7 @@ spec:
       labels:
         app: api-notes
         version: green
+        environment: staging
     spec:
       terminationGracePeriodSeconds: 30
       containers:
@@ -96,6 +104,9 @@ spec:
                   key: NOTES_PATH
             - name: DEPLOYMENT_ENV
               value: "green"
+          volumeMounts:
+            - name: notes-storage
+              mountPath: /data
           readinessProbe:
             httpGet:
               path: /healthz
@@ -108,29 +119,54 @@ spec:
               port: 5001
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: notes-storage
+          emptyDir: {}
 ---
-# Main Service (points to blue initially)
+# Production Service (Initially pointing to Blue)
 apiVersion: v1
 kind: Service
 metadata:
   name: api-notes
   namespace: api-notes
+  labels:
+    traffic: production
 spec:
   selector:
     app: api-notes
-    version: blue  # Initially points to blue
+    version: blue  # Production traffic initially goes to Blue
   ports:
     - name: http
       port: 80
       targetPort: 5001
   type: ClusterIP
 ---
-# Green Service (for testing before switching)
+# Blue Service (Direct access to Blue environment)
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-notes-blue
+  namespace: api-notes
+  labels:
+    traffic: blue
+spec:
+  selector:
+    app: api-notes
+    version: blue
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5001
+  type: ClusterIP
+---
+# Green Service (Direct access to Green environment for testing)
 apiVersion: v1
 kind: Service
 metadata:
   name: api-notes-green
   namespace: api-notes
+  labels:
+    traffic: green
 spec:
   selector:
     app: api-notes
